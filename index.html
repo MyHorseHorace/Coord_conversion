@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a1628">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CoordQC">
+<title>CoordQC — Convertisseur de coordonnées</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0a1628;
+    --bg2:       #0f1f3d;
+    --bg3:       #152846;
+    --border:    #1e3a5f;
+    --accent:    #2dd4bf;
+    --accent2:   #f59e0b;
+    --accent3:   #818cf8;
+    --text:      #e2e8f0;
+    --text2:     #94a3b8;
+    --text3:     #475569;
+    --error:     #f87171;
+    --success:   #34d399;
+    --card-r:    14px;
+    --mono:      'DM Mono', monospace;
+    --sans:      'Sora', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+  }
+
+  /* ── Header ── */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 20px 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .logo-mark {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--accent3));
+    border-radius: 10px;
+    display: grid; place-items: center;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--bg);
+    flex-shrink: 0;
+    letter-spacing: -0.5px;
+  }
+  .header-text h1 { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
+  .header-text p  { font-size: 11px; color: var(--text2); font-weight: 300; margin-top: 1px; }
+
+  /* ── Tabs ── */
+  .tabs {
+    display: flex;
+    padding: 12px 16px 0;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    flex-shrink: 0;
+    padding: 8px 14px;
+    border-radius: 8px 8px 0 0;
+    border: 1px solid transparent;
+    border-bottom: none;
+    background: transparent;
+    color: var(--text3);
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all .2s;
+    position: relative;
+    bottom: -1px;
+  }
+  .tab:hover { color: var(--text2); }
+  .tab.active {
+    color: var(--accent);
+    background: var(--bg2);
+    border-color: var(--border);
+    border-bottom-color: var(--bg2);
+  }
+  .tab .tag {
+    display: inline-block;
+    margin-left: 5px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .tab[data-sys="DMS"] .tag { background: #1e3a5f; color: var(--accent3); }
+  .tab[data-sys="DD"]  .tag { background: #1c3a2e; color: var(--success); }
+  .tab[data-sys="MTM"] .tag { background: #2d2010; color: var(--accent2); }
+  .tab[data-sys="UTM"] .tag { background: #2d1515; color: var(--error); }
+
+  /* ── Main scroll area ── */
+  main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 16px 100px;
+  }
+
+  /* ── Panels ── */
+  .panel { display: none; animation: fadeIn .2s ease; }
+  .panel.active { display: block; }
+  @keyframes fadeIn { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform: none; } }
+
+  /* ── Section label ── */
+  .section-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin: 20px 0 10px;
+  }
+  .section-label:first-child { margin-top: 0; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--card-r);
+    padding: 16px;
+    margin-bottom: 10px;
+  }
+  .card-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text2);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-title::before {
+    content: '';
+    display: block;
+    width: 3px; height: 14px;
+    border-radius: 2px;
+  }
+  .card[data-result="DMS"] .card-title::before  { background: var(--accent3); }
+  .card[data-result="DD"]  .card-title::before  { background: var(--success); }
+  .card[data-result="MTM"] .card-title::before  { background: var(--accent2); }
+  .card[data-result="UTM"] .card-title::before  { background: var(--error); }
+
+  /* ── Input rows ── */
+  .input-group {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .input-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .input-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: var(--text2);
+    width: 72px;
+    flex-shrink: 0;
+  }
+  .input-fields {
+    display: flex;
+    gap: 6px;
+    flex: 1;
+    align-items: center;
+  }
+
+  input[type="number"], input[type="text"], select {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+    padding: 10px 12px;
+    width: 100%;
+    outline: none;
+    transition: border-color .2s, box-shadow .2s;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  input[type="number"]:focus, input[type="text"]:focus, select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(45,212,191,.12);
+  }
+  input[type="number"].error, select.error {
+    border-color: var(--error);
+    box-shadow: 0 0 0 3px rgba(248,113,113,.12);
+  }
+  input[type="number"] { -moz-appearance: textfield; }
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+  .input-unit {
+    font-size: 11px;
+    color: var(--text3);
+    flex-shrink: 0;
+    font-family: var(--mono);
+  }
+
+  /* Select for hemisphere */
+  .hemi-select {
+    width: 68px !important;
+    flex-shrink: 0;
+    text-align: center;
+    padding: 10px 6px;
+    cursor: pointer;
+  }
+
+  /* Zone select */
+  .zone-select { cursor: pointer; }
+
+  /* ── Convert button ── */
+  .btn-convert {
+    width: 100%;
+    padding: 14px;
+    margin-top: 16px;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), #0ea5e9);
+    color: var(--bg);
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: opacity .2s, transform .1s;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-convert:active { transform: scale(0.98); opacity: 0.9; }
+
+  /* ── Results ── */
+  #results {
+    margin-top: 24px;
+    display: none;
+  }
+  #results.visible { display: block; }
+
+  .result-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+    gap: 8px;
+  }
+  .result-row:last-child { border-bottom: none; }
+  .result-key {
+    font-size: 11px;
+    color: var(--text2);
+    font-weight: 500;
+    flex-shrink: 0;
+    width: 80px;
+  }
+  .result-val {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text);
+    text-align: right;
+    flex: 1;
+    word-break: break-all;
+  }
+  .result-val.highlight { color: var(--accent); font-weight: 500; }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .badge-info  { background: #1e3a5f; color: var(--accent3); }
+  .badge-warn  { background: #2d2010; color: var(--accent2); }
+
+  /* ── Error message ── */
+  .error-msg {
+    background: rgba(248,113,113,.1);
+    border: 1px solid rgba(248,113,113,.3);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--error);
+    margin-top: 12px;
+    display: none;
+  }
+  .error-msg.visible { display: block; }
+
+  /* ── MTM warning ── */
+  .mtm-warn {
+    background: rgba(245,158,11,.08);
+    border: 1px solid rgba(245,158,11,.25);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12px;
+    color: var(--accent2);
+    margin-top: 4px;
+  }
+
+  /* ── Nomenclature info ── */
+  .info-box {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent3);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 12px;
+    color: var(--text2);
+    line-height: 1.7;
+    margin-bottom: 16px;
+    font-family: var(--mono);
+  }
+  .info-box strong { color: var(--text); font-weight: 500; }
+
+  /* ── Copy button ── */
+  .copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg3);
+    color: var(--text2);
+    font-size: 11px;
+    font-family: var(--sans);
+    cursor: pointer;
+    transition: all .2s;
+    margin-top: 12px;
+  }
+  .copy-btn:active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+
+  /* ── Install banner ── */
+  #install-banner {
+    display: none;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+    padding: 14px 16px;
+    gap: 12px;
+    align-items: center;
+    z-index: 200;
+    animation: slideUp .3s ease;
+  }
+  #install-banner.visible { display: flex; }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: none; } }
+  #install-banner p { flex: 1; font-size: 13px; color: var(--text2); }
+  #install-banner p strong { color: var(--text); display: block; font-size: 14px; }
+  .btn-install {
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: none;
+    background: var(--accent);
+    color: var(--bg);
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .btn-dismiss {
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text2);
+    font-size: 18px;
+    cursor: pointer;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+
+  /* ── Divider ── */
+  .divider { height: 1px; background: var(--border); margin: 6px 0 14px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-mark">XY</div>
+  <div class="header-text">
+    <h1>CoordQC</h1>
+    <p>DMS · DD · MTM · UTM — NAD83 / WGS84</p>
+  </div>
+</header>
+
+<div class="tabs" id="tabs">
+  <button class="tab active" data-sys="DMS" onclick="switchTab('DMS')">DMS <span class="tag">NAD83</span></button>
+  <button class="tab"        data-sys="DD"  onclick="switchTab('DD')">DD <span class="tag">NAD83</span></button>
+  <button class="tab"        data-sys="MTM" onclick="switchTab('MTM')">MTM <span class="tag">NAD83</span></button>
+  <button class="tab"        data-sys="UTM" onclick="switchTab('UTM')">UTM <span class="tag">WGS84</span></button>
+</div>
+
+<main>
+
+  <!-- ══ DMS PANEL ══ -->
+  <div class="panel active" id="panel-DMS">
+    <div class="info-box">
+      <strong>Nomenclature — DMS</strong><br>
+      Latitude  : <strong>45° 30′ 15.000″ N</strong> ou S<br>
+      Longitude : <strong>73° 34′ 08.000″ W</strong> ou E
+    </div>
+
+    <div class="section-label">Latitude</div>
+    <div class="card" style="padding:14px 16px;">
+      <div class="input-row">
+        <span class="input-label">Degrés</span>
+        <div class="input-fields">
+          <input type="number" id="dms-lat-d" placeholder="45" min="0" max="90">
+          <span class="input-unit">°</span>
+        </div>
+      </div>
+      <div style="height:8px"></div>
+      <div class="input-row">
+        <span class="input-label">Minutes</span>
+        <div class="input-fields">
+          <input type="number" id="dms-lat-m" placeholder="30" min="0" max="59">
+          <span class="input-unit">′</span>
+        </div>
+      </div>
+      <div style="height:8px"></div>
+      <div class="input-row">
+        <span class="input-label">Secondes</span>
+        <div class="input-fields">
+          <input type="number" id="dms-lat-s" placeholder="0.000" min="0" step="0.001">
+          <span class="input-unit">″</span>
+          <select class="hemi-select" id="dms-lat-h">
+            <option value="N">N</option>
+            <option value="S">S</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-label">Longitude</div>
+    <div class="card" style="padding:14px 16px;">
+      <div class="input-row">
+        <span class="input-label">Degrés</span>
+        <div class="input-fields">
+          <input type="number" id="dms-lon-d" placeholder="73" min="0" max="180">
+          <span class="input-unit">°</span>
+        </div>
+      </div>
+      <div style="height:8px"></div>
+      <div class="input-row">
+        <span class="input-label">Minutes</span>
+        <div class="input-fields">
+          <input type="number" id="dms-lon-m" placeholder="34" min="0" max="59">
+          <span class="input-unit">′</span>
+        </div>
+      </div>
+      <div style="height:8px"></div>
+      <div class="input-row">
+        <span class="input-label">Secondes</span>
+        <div class="input-fields">
+          <input type="number" id="dms-lon-s" placeholder="0.000" min="0" step="0.001">
+          <span class="input-unit">″</span>
+          <select class="hemi-select" id="dms-lon-h">
+            <option value="W">W</option>
+            <option value="E">E</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-convert" onclick="convertFrom('DMS')">Convertir →</button>
+    <div class="error-msg" id="err-DMS"></div>
+  </div>
+
+  <!-- ══ DD PANEL ══ -->
+  <div class="panel" id="panel-DD">
+    <div class="info-box">
+      <strong>Nomenclature — DD</strong><br>
+      Latitude  : <strong>45.504167</strong>  (+ = Nord, − = Sud)<br>
+      Longitude : <strong>−73.568889</strong> (+ = Est,  − = Ouest)
+    </div>
+
+    <div class="card" style="padding:14px 16px;">
+      <div class="input-row" style="margin-bottom:8px;">
+        <span class="input-label">Latitude</span>
+        <div class="input-fields">
+          <input type="number" id="dd-lat" placeholder="45.500000" step="0.000001">
+          <span class="input-unit">°</span>
+        </div>
+      </div>
+      <div class="input-row">
+        <span class="input-label">Longitude</span>
+        <div class="input-fields">
+          <input type="number" id="dd-lon" placeholder="−73.566667" step="0.000001">
+          <span class="input-unit">°</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-convert" onclick="convertFrom('DD')">Convertir →</button>
+    <div class="error-msg" id="err-DD"></div>
+  </div>
+
+  <!-- ══ MTM PANEL ══ -->
+  <div class="panel" id="panel-MTM">
+    <div class="info-box">
+      <strong>Nomenclature — MTM (NAD83)</strong><br>
+      Zone    : <strong>8</strong>  (méridien central 73.5° W, k₀ = 0.9999)<br>
+      Est     : <strong>299 590 m</strong>  (faux-est : 304 800 m)<br>
+      Nord    : <strong>5 040 011 m</strong>  (depuis l'équateur)
+    </div>
+
+    <div class="card" style="padding:14px 16px;">
+      <div class="input-row" style="margin-bottom:8px;">
+        <span class="input-label">Zone MTM</span>
+        <div class="input-fields">
+          <select class="zone-select" id="mtm-zone" style="width:100%">
+            <option value="2">2  — méridien 55.5° W</option>
+            <option value="3">3  — méridien 58.5° W</option>
+            <option value="4">4  — méridien 61.5° W</option>
+            <option value="5">5  — méridien 64.5° W</option>
+            <option value="6">6  — méridien 67.5° W</option>
+            <option value="7">7  — méridien 70.5° W</option>
+            <option value="8" selected>8  — méridien 73.5° W</option>
+            <option value="9">9  — méridien 76.5° W</option>
+            <option value="10">10 — méridien 79.5° W</option>
+            <option value="11">11 — méridien 82.5° W</option>
+            <option value="12">12 — méridien 85.5° W</option>
+          </select>
+        </div>
+      </div>
+      <div class="input-row" style="margin-bottom:8px;">
+        <span class="input-label">Est</span>
+        <div class="input-fields">
+          <input type="number" id="mtm-e" placeholder="299590" step="0.001">
+          <span class="input-unit">m</span>
+        </div>
+      </div>
+      <div class="input-row">
+        <span class="input-label">Nord</span>
+        <div class="input-fields">
+          <input type="number" id="mtm-n" placeholder="5040011" step="0.001">
+          <span class="input-unit">m</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-convert" onclick="convertFrom('MTM')">Convertir →</button>
+    <div class="error-msg" id="err-MTM"></div>
+  </div>
+
+  <!-- ══ UTM PANEL ══ -->
+  <div class="panel" id="panel-UTM">
+    <div class="info-box">
+      <strong>Nomenclature — UTM (WGS84)</strong><br>
+      Zone    : <strong>18N</strong>  (méridien central 75° W, k₀ = 0.9996)<br>
+      Est     : <strong>611 982 m</strong>  (faux-est : 500 000 m)<br>
+      Nord    : <strong>5 039 496 m</strong>  (depuis l'équateur, hémisphère N)
+    </div>
+
+    <div class="card" style="padding:14px 16px;">
+      <div class="input-row" style="margin-bottom:8px;">
+        <span class="input-label">Zone UTM</span>
+        <div class="input-fields">
+          <input type="number" id="utm-zone" placeholder="18" min="1" max="60">
+          <select class="hemi-select" id="utm-hemi">
+            <option value="N">N</option>
+            <option value="S">S</option>
+          </select>
+        </div>
+      </div>
+      <div class="input-row" style="margin-bottom:8px;">
+        <span class="input-label">Est</span>
+        <div class="input-fields">
+          <input type="number" id="utm-e" placeholder="611982" step="0.001">
+          <span class="input-unit">m</span>
+        </div>
+      </div>
+      <div class="input-row">
+        <span class="input-label">Nord</span>
+        <div class="input-fields">
+          <input type="number" id="utm-n" placeholder="5039496" step="0.001">
+          <span class="input-unit">m</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-convert" onclick="convertFrom('UTM')">Convertir →</button>
+    <div class="error-msg" id="err-UTM"></div>
+  </div>
+
+  <!-- ══ RESULTS (shared) ══ -->
+  <div id="results">
+    <div class="section-label" style="margin-top:28px;">Résultats</div>
+
+    <div class="card" data-result="DMS">
+      <div class="card-title">Degrés, Minutes, Secondes (DMS) · NAD83</div>
+      <div class="result-row">
+        <span class="result-key">Latitude</span>
+        <span class="result-val highlight" id="r-dms-lat">—</span>
+      </div>
+      <div class="result-row">
+        <span class="result-key">Longitude</span>
+        <span class="result-val highlight" id="r-dms-lon">—</span>
+      </div>
+    </div>
+
+    <div class="card" data-result="DD">
+      <div class="card-title">Degrés Décimaux (DD) · NAD83</div>
+      <div class="result-row">
+        <span class="result-key">Latitude</span>
+        <span class="result-val highlight" id="r-dd-lat">—</span>
+      </div>
+      <div class="result-row">
+        <span class="result-key">Longitude</span>
+        <span class="result-val highlight" id="r-dd-lon">—</span>
+      </div>
+    </div>
+
+    <div class="card" data-result="MTM" id="card-mtm">
+      <div class="card-title">MTM — Transverse Mercator Modifiée · NAD83</div>
+      <div class="result-row">
+        <span class="result-key">Zone</span>
+        <span class="result-val" id="r-mtm-zone">—</span>
+      </div>
+      <div class="result-row">
+        <span class="result-key">Méridien</span>
+        <span class="result-val" id="r-mtm-mer">—</span>
+      </div>
+      <div class="result-row">
+        <span class="result-key">Est</span>
+        <span class="result-val highlight" id="r-mtm-e">—</span>
+      </div>
+      <div class="result-row">
+        <span class="result-key">Nord</span>
+        <span class="result-val highlight" id="r-mtm-n">—</span>
+      </div>
+      <div id="mtm-warn-box"></div>
+    </div>
+
+    <div class="card" data-result="UTM">
+      <div class="card-title">UTM — Universal Transverse Mercator · WGS84</div>
+      <div class="result-row">
+        <span class="result-key">Zone</span>
+        <span class="result-val" id="r-utm-zone">—</span>
+      </div>
+      <div class="result-row">
+        <span class="result-key">Méridien</span>
+        <span class="result-val" id="r-utm-mer">—</span>
+      </div>
+      <div class="result-row">
+        <span class="result-key">Est</span>
+        <span class="result-val highlight" id="r-utm-e">—</span>
+      </div>
+      <div class="result-row">
+        <span class="result-key">Nord</span>
+        <span class="result-val highlight" id="r-utm-n">—</span>
+      </div>
+    </div>
+
+    <button class="copy-btn" onclick="copyResults()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      Copier tous les résultats
+    </button>
+  </div>
+
+</main>
+
+<div id="install-banner">
+  <p><strong>Installer CoordQC</strong>Ajouter à l'écran d'accueil pour utiliser hors ligne</p>
+  <button class="btn-install" id="btn-install">Installer</button>
+  <button class="btn-dismiss" onclick="dismissInstall()">✕</button>
+</div>
+
+<script>
+// ── Définitions de projections proj4js ───────────────────────────────────────
+
+// NAD83 géographique (≈ WGS84 pour le Québec, < 1 m)
+proj4.defs("EPSG:4617", "+proj=longlat +ellps=GRS80 +datum=NAD83 +no_defs");
+proj4.defs("EPSG:4326", "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs");
+
+const MTM_ZONES = {
+  2:  { epsg: "EPSG:32182", meridian: 55.5, lonMin: 54, lonMax: 57  },
+  3:  { epsg: "EPSG:32183", meridian: 58.5, lonMin: 57, lonMax: 60  },
+  4:  { epsg: "EPSG:32184", meridian: 61.5, lonMin: 60, lonMax: 63  },
+  5:  { epsg: "EPSG:32185", meridian: 64.5, lonMin: 63, lonMax: 66  },
+  6:  { epsg: "EPSG:32186", meridian: 67.5, lonMin: 66, lonMax: 69  },
+  7:  { epsg: "EPSG:32187", meridian: 70.5, lonMin: 69, lonMax: 72  },
+  8:  { epsg: "EPSG:32188", meridian: 73.5, lonMin: 72, lonMax: 75  },
+  9:  { epsg: "EPSG:32189", meridian: 76.5, lonMin: 75, lonMax: 78  },
+  10: { epsg: "EPSG:32190", meridian: 79.5, lonMin: 78, lonMax: 81  },
+  11: { epsg: "EPSG:32191", meridian: 82.5, lonMin: 81, lonMax: 84  },
+  12: { epsg: "EPSG:32192", meridian: 85.5, lonMin: 84, lonMax: 87  },
+};
+
+// Enregistrer toutes les zones MTM
+for (const [z, p] of Object.entries(MTM_ZONES)) {
+  proj4.defs(p.epsg,
+    `+proj=tmerc +lat_0=0 +lon_0=-${p.meridian} +k=0.9999 +x_0=304800 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs`
+  );
+}
+
+// Zones UTM WGS84
+function utmEpsg(zone, hemi) {
+  return hemi === "N" ? `EPSG:326${String(zone).padStart(2,'0')}`
+                      : `EPSG:327${String(zone).padStart(2,'0')}`;
+}
+function registerUTM(zone, hemi) {
+  const epsg = utmEpsg(zone, hemi);
+  const lon0 = -183 + zone * 6;
+  const y0   = hemi === "N" ? 0 : 10000000;
+  proj4.defs(epsg,
+    `+proj=utm +zone=${zone} ${hemi==='S'?'+south':''} +ellps=WGS84 +datum=WGS84 +units=m +no_defs`
+  );
+}
+for (let z = 1; z <= 60; z++) { registerUTM(z, "N"); registerUTM(z, "S"); }
+
+// ── Utilitaires ──────────────────────────────────────────────────────────────
+
+function dmsToDD(d, m, s, hemi) {
+  const dd = Math.abs(d) + m / 60 + s / 3600;
+  return ["S","W","O"].includes(hemi.toUpperCase()) ? -dd : dd;
+}
+
+function ddToDMS(dd, axis) {
+  const hemi = axis === "lat" ? (dd >= 0 ? "N" : "S") : (dd >= 0 ? "E" : "W");
+  const val  = Math.abs(dd);
+  let d = Math.floor(val);
+  let mf = (val - d) * 60;
+  let m  = Math.floor(mf);
+  let s  = (mf - m) * 60;
+  // Gestion débordement
+  s = Math.round(s * 1000) / 1000;
+  if (s >= 60) { s = 0; m++; }
+  if (m >= 60) { m = 0; d++; }
+  return { d, m, s: s.toFixed(3).padStart(6,'0'), hemi };
+}
+
+function formatDMS(dd, axis) {
+  const { d, m, s, hemi } = ddToDMS(dd, axis);
+  return `${d}° ${String(m).padStart(2,'0')}′ ${s}″  ${hemi}`;
+}
+
+function formatDD(v, decimals=8) {
+  return v.toFixed(decimals) + " °";
+}
+
+function formatM(v) {
+  return v.toFixed(3).replace(/\B(?=(\d{3})+(?!\d))/g, "\u202F") + " m";
+}
+
+function getMTMZone(lonDD) {
+  const abs = Math.abs(lonDD);
+  for (const [z, p] of Object.entries(MTM_ZONES)) {
+    if (abs >= p.lonMin && abs < p.lonMax) return parseInt(z);
+  }
+  return null;
+}
+
+function getUTMZone(lonDD) {
+  return Math.floor((lonDD + 180) / 6) + 1;
+}
+
+// ── Conversion centrale depuis DD ────────────────────────────────────────────
+
+function computeAll(latDD, lonDD, forceMTM = null, forceUTM = null, forceUTMHemi = "N") {
+  const res = { latDD, lonDD };
+
+  // DMS
+  res.latDMS = formatDMS(latDD, "lat");
+  res.lonDMS = formatDMS(lonDD, "lon");
+
+  // MTM
+  const mtmZone = forceMTM || getMTMZone(lonDD);
+  if (mtmZone) {
+    const p   = MTM_ZONES[mtmZone];
+    const [e, n] = proj4("EPSG:4617", p.epsg, [lonDD, latDD]);
+    res.mtm = { zone: mtmZone, epsg: p.epsg, meridian: p.meridian, e, n };
+    res.mtmOk = true;
+  } else {
+    res.mtmOk = false;
+  }
+
+  // UTM
+  const utmZone = forceUTM || getUTMZone(lonDD);
+  const utmHemi = forceUTMHemi;
+  const utmEp   = utmEpsg(utmZone, utmHemi);
+  const [ue, un] = proj4("EPSG:4326", utmEp, [lonDD, latDD]);
+  const utmMer   = Math.abs(-183 + utmZone * 6);
+  res.utm = { zone: utmZone, hemi: utmHemi, epsg: utmEp, meridian: utmMer, e: ue, n: un };
+
+  return res;
+}
+
+// ── Affichage des résultats ───────────────────────────────────────────────────
+
+function showResults(res, inputE = null, inputN = null, inputSys = null) {
+  document.getElementById("r-dms-lat").textContent = res.latDMS;
+  document.getElementById("r-dms-lon").textContent = res.lonDMS;
+  document.getElementById("r-dd-lat").textContent  = formatDD(res.latDD);
+  document.getElementById("r-dd-lon").textContent  = formatDD(res.lonDD);
+
+  if (res.mtmOk) {
+    const e = (inputSys === "MTM" && inputE != null) ? inputE : res.mtm.e;
+    const n = (inputSys === "MTM" && inputN != null) ? inputN : res.mtm.n;
+    document.getElementById("r-mtm-zone").textContent = `MTM-${res.mtm.zone}  (EPSG:${res.mtm.epsg.split(':')[1]})`;
+    document.getElementById("r-mtm-mer").textContent  = `${res.mtm.meridian}° W`;
+    document.getElementById("r-mtm-e").textContent    = formatM(e);
+    document.getElementById("r-mtm-n").textContent    = formatM(n);
+    document.getElementById("mtm-warn-box").innerHTML = "";
+  } else {
+    document.getElementById("r-mtm-zone").textContent = "—";
+    document.getElementById("r-mtm-mer").textContent  = "—";
+    document.getElementById("r-mtm-e").textContent    = "—";
+    document.getElementById("r-mtm-n").textContent    = "—";
+    document.getElementById("mtm-warn-box").innerHTML =
+      `<div class="mtm-warn">⚠ Longitude hors couverture MTM (54°–87° W)</div>`;
+  }
+
+  const ue = (inputSys === "UTM" && inputE != null) ? inputE : res.utm.e;
+  const un = (inputSys === "UTM" && inputN != null) ? inputN : res.utm.n;
+  document.getElementById("r-utm-zone").textContent = `${res.utm.zone}${res.utm.hemi}  (EPSG:${res.utm.epsg.split(':')[1]})`;
+  document.getElementById("r-utm-mer").textContent  = `${res.utm.meridian}° W`;
+  document.getElementById("r-utm-e").textContent    = formatM(ue);
+  document.getElementById("r-utm-n").textContent    = formatM(un);
+
+  const el = document.getElementById("results");
+  el.classList.add("visible");
+  el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function showError(sys, msg) {
+  const el = document.getElementById(`err-${sys}`);
+  el.textContent = msg;
+  el.classList.add("visible");
+}
+function clearError(sys) {
+  const el = document.getElementById(`err-${sys}`);
+  el.textContent = "";
+  el.classList.remove("visible");
+}
+
+function val(id) { return document.getElementById(id).value.trim(); }
+function num(id) { return parseFloat(document.getElementById(id).value); }
+
+// ── Handlers de conversion ────────────────────────────────────────────────────
+
+function convertFrom(sys) {
+  clearError(sys);
+  try {
+    let latDD, lonDD, forceMTM = null, forceUTM = null, forceUTMHemi = "N";
+    let inputE = null, inputN = null;
+
+    if (sys === "DMS") {
+      const ld = num("dms-lat-d"), lm = num("dms-lat-m"), ls = num("dms-lat-s"), lh = val("dms-lat-h");
+      const od = num("dms-lon-d"), om = num("dms-lon-m"), os = num("dms-lon-s"), oh = val("dms-lon-h");
+      if ([ld,lm,ls,od,om,os].some(isNaN))
+        throw new Error("Veuillez remplir tous les champs.");
+      if (lm >= 60 || ls >= 60 || om >= 60 || os >= 60)
+        throw new Error("Les minutes et secondes doivent être < 60.");
+      latDD = dmsToDD(ld, lm, ls, lh);
+      lonDD = dmsToDD(od, om, os, oh);
+
+    } else if (sys === "DD") {
+      latDD = num("dd-lat"); lonDD = num("dd-lon");
+      if (isNaN(latDD) || isNaN(lonDD)) throw new Error("Veuillez entrer une latitude et une longitude.");
+      if (Math.abs(latDD) > 90)  throw new Error("Latitude hors limites (−90° à +90°).");
+      if (Math.abs(lonDD) > 180) throw new Error("Longitude hors limites (−180° à +180°).");
+
+    } else if (sys === "MTM") {
+      forceMTM = parseInt(val("mtm-zone"));
+      inputE   = num("mtm-e"); inputN = num("mtm-n");
+      if (isNaN(inputE) || isNaN(inputN)) throw new Error("Veuillez entrer l'Est et le Nord.");
+      const p = MTM_ZONES[forceMTM];
+      const [lo, la] = proj4(p.epsg, "EPSG:4617", [inputE, inputN]);
+      latDD = la; lonDD = lo;
+      forceUTM = getUTMZone(lonDD);
+
+    } else if (sys === "UTM") {
+      forceUTM     = parseInt(val("utm-zone"));
+      forceUTMHemi = val("utm-hemi");
+      inputE = num("utm-e"); inputN = num("utm-n");
+      if (isNaN(forceUTM) || forceUTM < 1 || forceUTM > 60)
+        throw new Error("Zone UTM invalide (1–60).");
+      if (isNaN(inputE) || isNaN(inputN)) throw new Error("Veuillez entrer l'Est et le Nord.");
+      const ep = utmEpsg(forceUTM, forceUTMHemi);
+      const [lo, la] = proj4(ep, "EPSG:4326", [inputE, inputN]);
+      latDD = la; lonDD = lo;
+    }
+
+    if (Math.abs(latDD) > 90 || Math.abs(lonDD) > 180)
+      throw new Error("Coordonnées résultantes hors limites géographiques.");
+
+    const res = computeAll(latDD, lonDD, forceMTM, forceUTM, forceUTMHemi);
+    showResults(res, inputE, inputN, sys);
+
+  } catch (e) {
+    showError(sys, "⚠ " + e.message);
+  }
+}
+
+// ── Navigation par onglets ────────────────────────────────────────────────────
+
+function switchTab(sys) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.sys === sys));
+  document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.id === `panel-${sys}`));
+  document.getElementById("results").classList.remove("visible");
+}
+
+// ── Copier résultats ─────────────────────────────────────────────────────────
+
+function copyResults() {
+  const pairs = [
+    ["DMS Latitude",  "r-dms-lat"], ["DMS Longitude", "r-dms-lon"],
+    ["DD Latitude",   "r-dd-lat"],  ["DD Longitude",  "r-dd-lon"],
+    ["MTM Zone",      "r-mtm-zone"],["MTM Est",       "r-mtm-e"],  ["MTM Nord", "r-mtm-n"],
+    ["UTM Zone",      "r-utm-zone"],["UTM Est",       "r-utm-e"],  ["UTM Nord", "r-utm-n"],
+  ];
+  const text = pairs.map(([k, id]) => `${k.padEnd(14)}: ${document.getElementById(id).textContent}`).join("\n");
+  navigator.clipboard.writeText(text).catch(() => {});
+  const btn = document.querySelector(".copy-btn");
+  btn.textContent = "✓ Copié !";
+  setTimeout(() => btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copier tous les résultats`, 2000);
+}
+
+// ── PWA Install prompt ────────────────────────────────────────────────────────
+
+let deferredPrompt = null;
+window.addEventListener("beforeinstallprompt", e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById("install-banner").classList.add("visible");
+});
+document.getElementById("btn-install").addEventListener("click", async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  document.getElementById("install-banner").classList.remove("visible");
+});
+function dismissInstall() {
+  document.getElementById("install-banner").classList.remove("visible");
+}
+
+// ── Enregistrement du Service Worker (PWA) ───────────────────────────────────
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js")
+      .then(r => console.log("SW enregistré :", r.scope))
+      .catch(e => console.warn("SW échec :", e));
+  });
+}
+
+// Entrer avec la touche Entrée
+document.addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    const active = document.querySelector(".panel.active");
+    if (active) active.querySelector(".btn-convert").click();
+  }
+});
+</script>
+
+</body>
+</html>
